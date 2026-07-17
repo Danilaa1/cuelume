@@ -265,6 +265,33 @@ test("binding is delegated, dynamic, idempotent, and globally throttled", async 
   root.emit("pointerenter", child, { relatedTarget: later });
   assert.equal(counts.buffers, 5);
 
+  // A mouse click disarms hover: the pointerenter that browsers re-dispatch
+  // when an SPA navigation swaps the DOM under the stationary cursor stays
+  // quiet, no matter how long the transition takes.
+  now += 151;
+  root.emit("pointerdown", later, { clientX: 10, clientY: 10 });
+  now += 10_000;
+  root.emit("pointerenter", later);
+  assert.equal(counts.buffers, 5);
+
+  // Hand jitter within the re-arm distance stays quiet too.
+  root.emit("pointermove", root, { clientX: 12, clientY: 11 });
+  root.emit("pointerenter", later);
+  assert.equal(counts.buffers, 5);
+
+  // Real movement re-arms instantly.
+  root.emit("pointermove", root, { clientX: 30, clientY: 30 });
+  now += 151;
+  root.emit("pointerenter", later);
+  assert.equal(counts.buffers, 6);
+
+  // Touch presses don't disarm the (mouse-only) hover channel.
+  root.emit("pointerdown", touchTarget, { pointerType: "touch" });
+  assert.equal(counts.buffers, 7);
+  now += 151;
+  root.emit("pointerenter", later);
+  assert.equal(counts.buffers, 8);
+
 });
 
 test("finished shimmer graphs disconnect after their audible tail", async (context) => {

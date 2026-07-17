@@ -15,10 +15,35 @@ import { play } from "../audio/engine.js";
 import { isSoundName, type SoundName } from "../sounds/recipes.js";
 
 const HOVER_GAP_MS = 150;
+const HOVER_REARM_DISTANCE_PX = 4;
 const boundRoots = new WeakSet<ParentNode>();
 const handledEvents = new WeakSet<Event>();
 
 let lastHoverTime = -Infinity;
+
+// Browsers re-dispatch pointerenter when the DOM changes under a stationary
+// cursor — an SPA navigation or a scroll can land a hover target beneath the
+// pointer and chirp without any real mouse movement. Genuine hovers are always
+// accompanied by pointermove, which is never synthesized, so after a click or
+// scroll the hover channel stays disarmed until the pointer travels a few
+// pixels (enough to ignore hand jitter during a click).
+let hoverArmed = true;
+let armX = 0;
+let armY = 0;
+let pointerX = 0;
+let pointerY = 0;
+
+function disarmHover(): void {
+  hoverArmed = false;
+  armX = pointerX;
+  armY = pointerY;
+}
+
+function trackPointer(event: Event): void {
+  const pointer = event as PointerEvent;
+  pointerX = pointer.clientX;
+  pointerY = pointer.clientY;
+}
 
 function resolve(el: HTMLElement, attr: string, fallback: SoundName): SoundName {
   const requested = el.getAttribute(attr);
@@ -47,11 +72,18 @@ function listen(
   (root as EventTarget).addEventListener(
     eventName,
     (event) => {
+      if (eventName === "pointerdown" && (event as PointerEvent).pointerType === "mouse") {
+        trackPointer(event);
+        disarmHover();
+      }
+
       const element = findTarget(root, event, attr);
       if (!element || handledEvents.has(event)) return;
       if (mouseOnly && !isMouse(event as PointerEvent)) return;
 
       if (eventName === "pointerenter") {
+        if (!hoverArmed) return;
+
         const relatedTarget = (event as PointerEvent).relatedTarget;
         if (relatedTarget instanceof Node && element.contains(relatedTarget)) return;
 
@@ -81,4 +113,20 @@ export function bind(root?: ParentNode): void {
   listen(scope, "pointerdown", "data-cuelume-press", "press");
   listen(scope, "pointerup", "data-cuelume-release", "release");
   listen(scope, "click", "data-cuelume-toggle", "toggle");
+
+  const target = scope as EventTarget;
+  target.addEventListener(
+    "pointermove",
+    (event) => {
+      trackPointer(event);
+      if (
+        !hoverArmed &&
+        Math.hypot(pointerX - armX, pointerY - armY) > HOVER_REARM_DISTANCE_PX
+      ) {
+        hoverArmed = true;
+      }
+    },
+    true,
+  );
+  target.addEventListener("scroll", disarmHover, true);
 }
