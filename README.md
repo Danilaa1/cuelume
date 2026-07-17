@@ -98,6 +98,7 @@ import { play, bind, setEnabled, sounds, type SoundName } from "cuelume";
 
 - **Pointer-aware.** Hover, press, and release require a fine mouse pointer. Toggle follows native click activation, including keyboard and touch.
 - **Hover repeat guard.** Hover sounds are globally throttled to one every 150ms, so sweeping across a menu stays quiet.
+- **No phantom hovers.** After a mouse press or a scroll, hover stays disarmed until the pointer genuinely moves — SPA navigations and scrolling that swap the DOM under a stationary cursor don't chirp.
 - **One lazy `AudioContext`.** Shared across all sounds, created on first use.
 - **Autoplay-friendly.** Attempts to resume suspended audio without surfacing errors when a browser blocks it.
 - **SSR-safe.** Importing on the server is a no-op.
