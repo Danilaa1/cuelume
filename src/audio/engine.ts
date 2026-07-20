@@ -19,16 +19,22 @@ const SOURCE_STOP_PADDING = 0.05;
 const CLEANUP_MARGIN = 0.05;
 const INAUDIBLE_GAIN = 0.001;
 
+export type PlayOptions = {
+  /** Shifts pitched layers by this many semitones. Noise layers are unaffected. */
+  transpose?: number;
+};
+
 function renderTone(
   context: AudioContext,
   destination: AudioNode,
   layer: ToneLayer,
   startTime: number,
+  transposeCents: number,
 ): void {
   const oscillator = context.createOscillator();
   oscillator.type = layer.waveform;
   oscillator.frequency.setValueAtTime(layer.frequency, startTime);
-  if (layer.detune) oscillator.detune.value = layer.detune;
+  oscillator.detune.value = (layer.detune ?? 0) + transposeCents;
 
   if (layer.glideTo !== undefined) {
     const glideTime = layer.glideTime ?? layer.attack + layer.decay;
@@ -120,7 +126,7 @@ function shimmerTail(shimmer?: Shimmer): number {
   return shimmer.delay * (1 + Math.ceil(Math.log(INAUDIBLE_GAIN) / Math.log(shimmer.feedback)));
 }
 
-function renderRecipe(context: AudioContext, recipe: SoundRecipe): void {
+function renderRecipe(context: AudioContext, recipe: SoundRecipe, transposeCents: number): void {
   const now = context.currentTime;
   const master = context.createGain();
   master.gain.value = recipe.masterGain;
@@ -132,7 +138,7 @@ function renderRecipe(context: AudioContext, recipe: SoundRecipe): void {
 
   for (const layer of recipe.layers) {
     const startTime = now + (layer.offset ?? 0);
-    if (layer.kind === "tone") renderTone(context, master, layer, startTime);
+    if (layer.kind === "tone") renderTone(context, master, layer, startTime, transposeCents);
     else renderNoise(context, master, layer, startTime);
   }
 
@@ -172,21 +178,27 @@ function getAudioContext(): AudioContext | null {
  * started it suspended (e.g. before any user gesture), and is a no-op
  * when Web Audio is unavailable (SSR, old browsers).
  */
-export function play(sound: SoundName = "chime"): void {
+export function play(sound: SoundName = "chime", options?: PlayOptions): void {
   if (!enabled || !isSoundName(sound)) return;
   if (typeof navigator !== "undefined" && navigator.userActivation?.hasBeenActive === false) return;
+
+  const transpose = options?.transpose;
+  const transposeCents = typeof transpose === "number" ? transpose * 100 : 0;
+  const safeTransposeCents = Number.isFinite(transposeCents) ? transposeCents : 0;
 
   const context = getAudioContext();
   if (!context) return;
 
   const recipe = RECIPES[sound];
   if (context.state === "running") {
-    renderRecipe(context, recipe);
+    renderRecipe(context, recipe, safeTransposeCents);
   } else {
     try {
       void context.resume().then(
         () => {
-          if (enabled && context.state === "running") renderRecipe(context, recipe);
+          if (enabled && context.state === "running") {
+            renderRecipe(context, recipe, safeTransposeCents);
+          }
         },
         () => {},
       );
