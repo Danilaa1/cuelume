@@ -50,6 +50,9 @@ import { play } from "cuelume";
 
 await navigator.clipboard.writeText(text);
 play("success");
+
+// Shift pitched layers down one octave (noise layers are unchanged).
+play("chime", { transpose: -12 });
 ```
 
 Need a sound preference? Your app owns the setting; Cuelume only applies it:
@@ -85,10 +88,10 @@ Cuelume starts enabled and does not read or write storage.
 ## API
 
 ```ts
-import { play, bind, setEnabled, sounds, type SoundName } from "cuelume";
+import { play, bind, setEnabled, sounds, type PlayOptions, type SoundName } from "cuelume";
 ```
 
-- **`play(name?: SoundName)`** — play a sound immediately. Defaults to `"chime"`.
+- **`play(name?: SoundName, options?: PlayOptions)`** — play a sound immediately. Defaults to `"chime"`.
 - **`bind(root?: ParentNode)`** — delegate all `data-cuelume-*` interactions under `root` (defaults to the whole document). Idempotent and handles elements added later.
 - **`setEnabled(enabled: boolean)`** — enable or disable future playback. Does not persist the preference or stop sounds already playing.
 - **`sounds`** — the list of all sound names.

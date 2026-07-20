@@ -113,6 +113,63 @@ test("invalid names and AudioContext failures are silent", async (context) => {
 
 });
 
+test("play transposes pitched layers in semitones", async (context) => {
+  context.after(restoreGlobals);
+  const detunes = [];
+
+  class AudioNodeStub {
+    connect(destination) {
+      return destination;
+    }
+    disconnect() {}
+  }
+
+  const parameter = () => ({
+    value: 0,
+    setValueAtTime() {},
+    exponentialRampToValueAtTime() {},
+  });
+
+  class TransposeContext {
+    state = "running";
+    currentTime = 0;
+    sampleRate = 1;
+    destination = new AudioNodeStub();
+    createGain() {
+      return Object.assign(new AudioNodeStub(), { gain: parameter() });
+    }
+    createOscillator() {
+      const detune = parameter();
+      detunes.push(detune);
+      return Object.assign(new AudioNodeStub(), {
+        frequency: parameter(),
+        detune,
+        start() {},
+        stop() {},
+      });
+    }
+    createBiquadFilter() {
+      return Object.assign(new AudioNodeStub(), { frequency: parameter(), Q: parameter() });
+    }
+    createDelay() {
+      return Object.assign(new AudioNodeStub(), { delayTime: parameter() });
+    }
+  }
+
+  setGlobal("setTimeout", () => 0);
+  setGlobal("window", { AudioContext: TransposeContext });
+
+  const { play } = await import(`../dist/audio/engine.js?transpose=${Date.now()}`);
+  play("chime", { transpose: -12 });
+  play("bloom", { transpose: 1 });
+  play("chime", { transpose: Number.NaN });
+
+  assert.deepEqual(
+    detunes.map(({ value }) => value),
+    [-1200, -1200, 100, 112, 0, 0],
+  );
+});
+
 test("binding is delegated, dynamic, idempotent, and globally throttled", async (context) => {
   context.after(restoreGlobals);
   const counts = { buffers: 0, oscillators: 0 };

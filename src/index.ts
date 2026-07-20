@@ -12,6 +12,7 @@
  */
 
 export type { SoundName } from "./sounds/recipes.js";
+export type { PlayOptions } from "./audio/engine.js";
 export { sounds } from "./sounds/recipes.js";
 export { play, setEnabled } from "./audio/engine.js";
 export { bind } from "./interactions/bind.js";
