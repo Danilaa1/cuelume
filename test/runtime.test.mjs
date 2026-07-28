@@ -16,9 +16,26 @@ function restoreGlobals() {
   originals.clear();
 }
 
+const audioParam = () => ({
+  value: 0,
+  setValueAtTime() {},
+  exponentialRampToValueAtTime() {},
+});
+
+function compressor(node) {
+  return Object.assign(node, {
+    threshold: audioParam(),
+    knee: audioParam(),
+    ratio: audioParam(),
+    attack: audioParam(),
+    release: audioParam(),
+  });
+}
+
 test("expanded palette exposes error, page, loading, and ready", async () => {
-  const { sounds } = await import("../dist/index.js");
+  const { setVolume, sounds } = await import("../dist/index.js");
   assert.deepEqual(sounds.slice(-4), ["error", "page", "loading", "ready"]);
+  assert.equal(typeof setVolume, "function");
 });
 
 test("play waits for user activation before creating AudioContext", async (context) => {
@@ -113,6 +130,86 @@ test("invalid names and AudioContext failures are silent", async (context) => {
 
 });
 
+test("volume is clamped and one boosted output bus is reused", async (context) => {
+  context.after(restoreGlobals);
+  const gains = [];
+  const compressors = [];
+
+  class AudioNodeStub {
+    constructor(name) {
+      this.name = name;
+      this.connections = [];
+    }
+    connect(destination) {
+      this.connections.push(destination);
+      return destination;
+    }
+    disconnect() {}
+  }
+
+  class VolumeContext {
+    state = "running";
+    currentTime = 0;
+    sampleRate = 1;
+    destination = new AudioNodeStub("destination");
+    createGain() {
+      const gain = Object.assign(new AudioNodeStub("gain"), { gain: audioParam() });
+      gains.push(gain);
+      return gain;
+    }
+    createDynamicsCompressor() {
+      const node = compressor(new AudioNodeStub("compressor"));
+      compressors.push(node);
+      return node;
+    }
+    createBuffer() {
+      return { getChannelData: () => new Float32Array(1) };
+    }
+    createBufferSource() {
+      return Object.assign(new AudioNodeStub("buffer-source"), {
+        buffer: null,
+        start() {},
+        stop() {},
+      });
+    }
+    createBiquadFilter() {
+      return Object.assign(new AudioNodeStub("filter"), {
+        frequency: audioParam(),
+        Q: audioParam(),
+      });
+    }
+  }
+
+  setGlobal("setTimeout", () => 0);
+  setGlobal("window", { AudioContext: VolumeContext });
+
+  const { play, setVolume } = await import(`../dist/audio/engine.js?volume=${Date.now()}`);
+
+  setVolume(2);
+  play("press", { volume: 0.5 });
+  setVolume(0.5);
+  play("press", { volume: 0.5 });
+  play("press", { volume: 2 });
+  play("press", { volume: Number.NaN });
+  setVolume(-1);
+  setVolume(Number.NaN);
+  setVolume(Number.POSITIVE_INFINITY);
+  play("press");
+
+  const output = gains[0];
+  const masters = gains.slice(1).filter((gain) => gain.connections.includes(output));
+
+  assert.deepEqual(
+    masters.map(({ gain }) => gain.value),
+    [0.2, 0.1, 0.2, 0.2],
+  );
+  assert.ok(output.gain.value > 1);
+  assert.equal(compressors.length, 1);
+  assert.deepEqual(output.connections, [compressors[0]]);
+  assert.equal(compressors[0].connections.length, 1);
+  assert.equal(compressors[0].connections[0].name, "destination");
+});
+
 test("binding is delegated, dynamic, idempotent, and globally throttled", async (context) => {
   context.after(restoreGlobals);
   const counts = { buffers: 0, oscillators: 0 };
@@ -124,24 +221,21 @@ test("binding is delegated, dynamic, idempotent, and globally throttled", async 
     disconnect() {}
   }
 
-  const parameter = () => ({
-    value: 0,
-    setValueAtTime() {},
-    exponentialRampToValueAtTime() {},
-  });
-
   class WorkingContext {
     state = "running";
     currentTime = 0;
     sampleRate = 1;
     destination = new AudioNodeStub();
     createGain() {
-      return Object.assign(new AudioNodeStub(), { gain: parameter() });
+      return Object.assign(new AudioNodeStub(), { gain: audioParam() });
+    }
+    createDynamicsCompressor() {
+      return compressor(new AudioNodeStub());
     }
     createOscillator() {
       return Object.assign(new AudioNodeStub(), {
-        frequency: parameter(),
-        detune: parameter(),
+        frequency: audioParam(),
+        detune: audioParam(),
         start() {
           counts.oscillators++;
         },
@@ -156,10 +250,10 @@ test("binding is delegated, dynamic, idempotent, and globally throttled", async 
       return Object.assign(new AudioNodeStub(), { buffer: null, start() {}, stop() {} });
     }
     createBiquadFilter() {
-      return Object.assign(new AudioNodeStub(), { frequency: parameter(), Q: parameter() });
+      return Object.assign(new AudioNodeStub(), { frequency: audioParam(), Q: audioParam() });
     }
     createDelay() {
-      return Object.assign(new AudioNodeStub(), { delayTime: parameter() });
+      return Object.assign(new AudioNodeStub(), { delayTime: audioParam() });
     }
   }
 
@@ -271,24 +365,22 @@ test("finished shimmer graphs disconnect after their audible tail", async (conte
   context.after(restoreGlobals);
   const timers = [];
   const disconnected = [];
+  const nodes = new Map();
 
   class AudioNodeStub {
     constructor(name) {
       this.name = name;
+      this.connections = [];
+      nodes.set(name, this);
     }
     connect(destination) {
+      this.connections.push(destination);
       return destination;
     }
     disconnect() {
       disconnected.push(this.name);
     }
   }
-
-  const parameter = () => ({
-    value: 0,
-    setValueAtTime() {},
-    exponentialRampToValueAtTime() {},
-  });
 
   let gainCount = 0;
   class CleanupContext {
@@ -297,19 +389,25 @@ test("finished shimmer graphs disconnect after their audible tail", async (conte
     sampleRate = 1;
     destination = new AudioNodeStub("destination");
     createGain() {
-      const names = ["master", "feedback-gain", "wet-gain", "tone-gain", "tone-gain"];
-      return Object.assign(new AudioNodeStub(names[gainCount++] ?? "gain"), { gain: parameter() });
+      const names = ["output", "master", "feedback-gain", "wet-gain", "tone-gain", "tone-gain"];
+      return Object.assign(new AudioNodeStub(names[gainCount++] ?? "gain"), { gain: audioParam() });
+    }
+    createDynamicsCompressor() {
+      return compressor(new AudioNodeStub("limiter"));
     }
     createDelay() {
-      return Object.assign(new AudioNodeStub("delay"), { delayTime: parameter() });
+      return Object.assign(new AudioNodeStub("delay"), { delayTime: audioParam() });
     }
     createBiquadFilter() {
-      return Object.assign(new AudioNodeStub("feedback-filter"), { frequency: parameter(), Q: parameter() });
+      return Object.assign(new AudioNodeStub("feedback-filter"), {
+        frequency: audioParam(),
+        Q: audioParam(),
+      });
     }
     createOscillator() {
       return Object.assign(new AudioNodeStub("oscillator"), {
-        frequency: parameter(),
-        detune: parameter(),
+        frequency: audioParam(),
+        detune: audioParam(),
         start() {},
         stop() {},
       });
@@ -327,6 +425,10 @@ test("finished shimmer graphs disconnect after their audible tail", async (conte
 
   assert.equal(timers.length, 1);
   assert.equal(Math.round(timers[0].delay), 1176);
+  assert.equal(nodes.get("master").connections.includes(nodes.get("output")), true);
+  assert.equal(nodes.get("wet-gain").connections.includes(nodes.get("output")), true);
+  assert.deepEqual(nodes.get("output").connections, [nodes.get("limiter")]);
+  assert.deepEqual(nodes.get("limiter").connections, [nodes.get("destination")]);
   timers[0].callback();
   assert.deepEqual(disconnected, ["master", "delay", "feedback-filter", "feedback-gain", "wet-gain"]);
 

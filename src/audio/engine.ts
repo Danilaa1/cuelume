@@ -18,6 +18,7 @@ import {
 const SOURCE_STOP_PADDING = 0.05;
 const CLEANUP_MARGIN = 0.05;
 const INAUDIBLE_GAIN = 0.001;
+const OUTPUT_GAIN = 4;
 
 function renderTone(
   context: AudioContext,
@@ -120,14 +121,35 @@ function shimmerTail(shimmer?: Shimmer): number {
   return shimmer.delay * (1 + Math.ceil(Math.log(INAUDIBLE_GAIN) / Math.log(shimmer.feedback)));
 }
 
-function renderRecipe(context: AudioContext, recipe: SoundRecipe): void {
+let sharedOutput: GainNode | null = null;
+
+function getOutput(context: AudioContext): GainNode {
+  if (sharedOutput) return sharedOutput;
+
+  const output = context.createGain();
+  output.gain.value = OUTPUT_GAIN;
+
+  const limiter = context.createDynamicsCompressor();
+  limiter.threshold.value = -8;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.08;
+
+  output.connect(limiter).connect(context.destination);
+  sharedOutput = output;
+  return output;
+}
+
+function renderRecipe(context: AudioContext, recipe: SoundRecipe, volume: number): void {
   const now = context.currentTime;
+  const output = getOutput(context);
   const master = context.createGain();
-  master.gain.value = recipe.masterGain;
-  master.connect(context.destination);
+  master.gain.value = recipe.masterGain * volume;
+  master.connect(output);
 
   const shimmerNodes = recipe.shimmer
-    ? attachShimmer(context, master, context.destination, recipe.shimmer)
+    ? attachShimmer(context, master, output, recipe.shimmer)
     : [];
 
   for (const layer of recipe.layers) {
@@ -145,10 +167,22 @@ function renderRecipe(context: AudioContext, recipe: SoundRecipe): void {
 
 let sharedContext: AudioContext | null = null;
 let enabled = true;
+let globalVolume = 1;
+
+function normalizeVolume(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(1, Math.max(0, value))
+    : fallback;
+}
 
 /** Enables or disables future playback. Preference storage stays with the app. */
 export function setEnabled(value: boolean): void {
   if (typeof value === "boolean") enabled = value;
+}
+
+/** Sets the volume multiplier for future playback. Preference storage stays with the app. */
+export function setVolume(value: number): void {
+  globalVolume = normalizeVolume(value, globalVolume);
 }
 
 function getAudioContext(): AudioContext | null {
@@ -172,21 +206,24 @@ function getAudioContext(): AudioContext | null {
  * started it suspended (e.g. before any user gesture), and is a no-op
  * when Web Audio is unavailable (SSR, old browsers).
  */
-export function play(sound: SoundName = "chime"): void {
+export function play(sound: SoundName = "chime", options?: { volume?: number }): void {
   if (!enabled || !isSoundName(sound)) return;
   if (typeof navigator !== "undefined" && navigator.userActivation?.hasBeenActive === false) return;
+
+  const playVolume = globalVolume * normalizeVolume(options?.volume, 1);
+  if (playVolume === 0) return;
 
   const context = getAudioContext();
   if (!context) return;
 
   const recipe = RECIPES[sound];
   if (context.state === "running") {
-    renderRecipe(context, recipe);
+    renderRecipe(context, recipe, playVolume);
   } else {
     try {
       void context.resume().then(
         () => {
-          if (enabled && context.state === "running") renderRecipe(context, recipe);
+          if (enabled && context.state === "running") renderRecipe(context, recipe, playVolume);
         },
         () => {},
       );
