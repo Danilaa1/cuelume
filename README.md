@@ -50,18 +50,20 @@ import { play } from "cuelume";
 
 await navigator.clipboard.writeText(text);
 play("success");
+play("success", { volume: 0.4 }); // quieter for this play only
 ```
 
-Need a sound preference? Your app owns the setting; Cuelume only applies it:
+Need sound preferences? Your app owns the settings; Cuelume only applies them:
 
 ```ts
-import { setEnabled } from "cuelume";
+import { setEnabled, setVolume } from "cuelume";
 
+setVolume(0.7);    // global multiplier, clamped to 0–1
 setEnabled(false); // future play attempts become no-ops
 setEnabled(true);  // enable playback again
 ```
 
-Cuelume starts enabled and does not read or write storage.
+Cuelume starts enabled at full volume and does not read or write storage.
 
 ## Sounds
 
@@ -85,19 +87,21 @@ Cuelume starts enabled and does not read or write storage.
 ## API
 
 ```ts
-import { play, bind, setEnabled, sounds, type SoundName } from "cuelume";
+import { play, bind, setEnabled, setVolume, sounds, type SoundName } from "cuelume";
 ```
 
-- **`play(name?: SoundName)`** — play a sound immediately. Defaults to `"chime"`.
+- **`play(name?: SoundName, options?: { volume?: number })`** — play a sound immediately. Defaults to `"chime"`; `options.volume` controls this play only.
 - **`bind(root?: ParentNode)`** — delegate all `data-cuelume-*` interactions under `root` (defaults to the whole document). Idempotent and handles elements added later.
 - **`setEnabled(enabled: boolean)`** — enable or disable future playback. Does not persist the preference or stop sounds already playing.
+- **`setVolume(volume: number)`** — set the global volume for future playback, clamped to `0–1`. Non-finite values are ignored and preferences are not persisted.
 - **`sounds`** — the list of all sound names.
 - **`SoundName`** — union type of the fourteen sound names.
 
 ## Defaults that behave
 
-- **Pointer-aware.** Hover, press, and release require a fine mouse pointer. Toggle follows native click activation, including keyboard and touch.
+- **Pointer-aware.** Hover requires a fine mouse pointer. Press and release support mouse, touch, and pen; toggle follows native click activation, including keyboard.
 - **Hover repeat guard.** Hover sounds are globally throttled to one every 150ms, so sweeping across a menu stays quiet.
+- **Audible without clipping.** One shared boosted output stage keeps sounds clear, with native compression protecting overlapping cues.
 - **One lazy `AudioContext`.** Shared across all sounds, created on first use.
 - **Autoplay-friendly.** Attempts to resume suspended audio without surfacing errors when a browser blocks it.
 - **SSR-safe.** Importing on the server is a no-op.
