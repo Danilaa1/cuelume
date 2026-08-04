@@ -1,6 +1,6 @@
 # Cuelume
 
-Fourteen carefully designed interaction sounds for the web. Synthesized live with Web Audio, with no audio files and zero runtime dependencies.
+Seventeen carefully designed interaction sounds for the web. Synthesized live with Web Audio, with no audio files and zero runtime dependencies.
 
 Cuelume is a curated sound palette, not an audio engine. It gives buttons, links, toggles, and completed actions clear feedback without asking developers to design sounds themselves. Add an attribute, call `bind()`, done.
 
@@ -24,6 +24,7 @@ Add data attributes to your markup:
 <button data-cuelume-press data-cuelume-release>Save</button>
 <a data-cuelume-hover="tick">Docs</a>
 <button data-cuelume-toggle>Dark mode</button>
+<button data-cuelume-press="pulse" data-cuelume-release="scan">Launch</button>
 ```
 
 Then wire everything up once:
@@ -73,7 +74,7 @@ Cuelume starts enabled at full volume and does not read or write storage.
 | `sparkle` | Quick four-note twinkle      | Playful accents                  |
 | `droplet` | Single note gliding down     | Dismiss, collapse                |
 | `bloom`   | Warm slow swell              | Reveal, expand                   |
-| `whisper` | Breathy quiet swell          | Dense lists                      |
+| `whisper` | Soft hush with a falling tone | Tooltips and quiet previews      |
 | `tick`    | Crisp instant tick           | Nav and menu hover               |
 | `press`   | Dull muted knock             | Pointer down                     |
 | `release` | Brighter springy tick        | Pointer up                       |
@@ -82,7 +83,10 @@ Cuelume starts enabled at full volume and does not read or write storage.
 | `error`   | Soft knock and descending refusal | Recoverable errors          |
 | `page`    | Papery flick with a glass tick | Pages, galleries, carousels    |
 | `loading` | Brief unresolved rising shimmer | User-initiated work starting  |
-| `ready`   | Focus tick with a harmonic bloom | Image or content loaded       |
+| `ready`   | Rising lock-on with a clear resolve | Content or system ready     |
+| `pulse`   | Compact synthetic chirp         | Primary buttons and controls  |
+| `scan`    | Fast three-step locator signal  | Menus and secondary buttons   |
+| `arrival` | Rising harmonic portal          | Client-side page arrivals     |
 
 ## API
 
@@ -95,7 +99,7 @@ import { play, bind, setEnabled, setVolume, sounds, type SoundName } from "cuelu
 - **`setEnabled(enabled: boolean)`** — enable or disable future playback. Does not persist the preference or stop sounds already playing.
 - **`setVolume(volume: number)`** — set the global volume for future playback, clamped to `0–1`. Non-finite values are ignored and preferences are not persisted.
 - **`sounds`** — the list of all sound names.
-- **`SoundName`** — union type of the fourteen sound names.
+- **`SoundName`** — union type of the seventeen sound names.
 
 ## Defaults that behave
 
@@ -123,10 +127,13 @@ useEffect(() => {
 Astro (with view transitions):
 
 ```js
-import { bind } from "cuelume";
+import { bind, play } from "cuelume";
 
 bind();
+document.addEventListener("astro:page-load", () => play("arrival"));
 ```
+
+Browsers block audio on a fresh visit until the user interacts with the page. The arrival cue therefore plays on client-side navigations after that first interaction.
 
 ## License
 

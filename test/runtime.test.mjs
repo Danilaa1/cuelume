@@ -32,9 +32,10 @@ function compressor(node) {
   });
 }
 
-test("expanded palette exposes error, page, loading, and ready", async () => {
+test("expanded palette exposes sci-fi interaction and arrival cues", async () => {
   const { setVolume, sounds } = await import("../dist/index.js");
-  assert.deepEqual(sounds.slice(-4), ["error", "page", "loading", "ready"]);
+  assert.equal(sounds.length, 17);
+  assert.deepEqual(sounds.slice(-3), ["pulse", "scan", "arrival"]);
   assert.equal(typeof setVolume, "function");
 });
 
@@ -350,9 +351,10 @@ test("binding is delegated, dynamic, idempotent, and globally throttled", async 
 
   const invalid = new FakeElement(root);
   invalid.setAttribute("data-cuelume-hover", "toString");
+  const oscillatorsBeforeInvalid = counts.oscillators;
   now += 151;
   root.emit("pointerenter", invalid);
-  assert.equal(counts.oscillators, 2);
+  assert.equal(counts.oscillators, oscillatorsBeforeInvalid + 2);
 
   const child = new FakeElement(later);
   now += 151;

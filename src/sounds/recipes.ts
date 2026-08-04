@@ -1,5 +1,5 @@
 /**
- * The sound palette — layer/recipe types plus the fourteen built-in recipes.
+ * The sound palette — layer/recipe types plus the seventeen built-in recipes.
  * Each sound has its own distinct shape — a chime, an arpeggio, a pitch
  * glide, a warm pad, a breath — rather than being a volume/EQ tweak on
  * the same click. Add a new one here without touching any audio graph code.
@@ -91,11 +91,12 @@ export const RECIPES = {
     ],
     shimmer: { delay: 0.15, feedback: 0.2, wet: 0.12, lowpass: 2500 },
   },
-  /** The quietest option — a breathy, textureless swell for dense lists. */
+  /** A soft hush with a falling tone — for tooltips and low-priority previews. */
   whisper: {
-    masterGain: 0.5,
+    masterGain: 0.48,
     layers: [
-      { kind: "noise", filterType: "lowpass", filterFrequency: 1200, filterQ: 0.7, attack: 0.04, decay: 0.16, peak: 0.05 },
+      { kind: "noise", filterType: "lowpass", filterFrequency: 1600, filterQ: 0.7, attack: 0.025, decay: 0.13, peak: 0.04 },
+      { kind: "tone", waveform: "sine", frequency: 880, glideTo: 660, glideTime: 0.14, offset: 0.01, attack: 0.012, decay: 0.14, peak: 0.025 },
     ],
   },
   /** A focused, bandpass-filtered tick with a bright sine ping on top — crisp and instant. */
@@ -166,15 +167,44 @@ export const RECIPES = {
     ],
     shimmer: { delay: 0.11, feedback: 0.18, wet: 0.12, lowpass: 2800 },
   },
-  /** A precise focus tick opening into a soft harmonic bloom — content is ready. */
+  /** A quick lock-on sweep resolving to a clear tone — the system is ready. */
   ready: {
-    masterGain: 0.45,
+    masterGain: 0.48,
     layers: [
-      { kind: "noise", filterType: "bandpass", filterFrequency: 3200, filterQ: 1.7, attack: 0.001, decay: 0.018, peak: 0.1 },
-      { kind: "tone", waveform: "sine", frequency: 659.25, offset: 0.025, attack: 0.012, decay: 0.2, peak: 0.05 },
-      { kind: "tone", waveform: "sine", frequency: 987.77, offset: 0.025, attack: 0.012, decay: 0.22, peak: 0.035 },
+      { kind: "noise", filterType: "bandpass", filterFrequency: 3600, filterQ: 1.8, attack: 0.001, decay: 0.02, peak: 0.11 },
+      { kind: "tone", waveform: "triangle", frequency: 330, glideTo: 660, glideTime: 0.12, offset: 0.012, attack: 0.004, decay: 0.16, peak: 0.055 },
+      { kind: "tone", waveform: "sine", frequency: 990, offset: 0.13, attack: 0.004, decay: 0.22, peak: 0.06 },
     ],
-    shimmer: { delay: 0.13, feedback: 0.2, wet: 0.13, lowpass: 3600 },
+    shimmer: { delay: 0.1, feedback: 0.16, wet: 0.1, lowpass: 4200 },
+  },
+  /** A compact synthetic chirp — crisp feedback for primary buttons and controls. */
+  pulse: {
+    masterGain: 0.42,
+    layers: [
+      { kind: "noise", filterType: "bandpass", filterFrequency: 2600, filterQ: 2.4, attack: 0.001, decay: 0.022, peak: 0.08 },
+      { kind: "tone", waveform: "triangle", frequency: 620, glideTo: 1240, glideTime: 0.07, attack: 0.002, decay: 0.085, peak: 0.055 },
+    ],
+  },
+  /** A fast three-step locator signal — playful feedback for menus and secondary buttons. */
+  scan: {
+    masterGain: 0.4,
+    layers: [
+      { kind: "tone", waveform: "sine", frequency: 740, attack: 0.002, decay: 0.055, peak: 0.05 },
+      { kind: "tone", waveform: "sine", frequency: 1110, offset: 0.045, attack: 0.002, decay: 0.055, peak: 0.045 },
+      { kind: "tone", waveform: "sine", frequency: 1665, offset: 0.09, attack: 0.002, decay: 0.07, peak: 0.04 },
+    ],
+    shimmer: { delay: 0.065, feedback: 0.16, wet: 0.1, lowpass: 4200 },
+  },
+  /** A rising harmonic portal with a soft tail — for client-side page arrivals. */
+  arrival: {
+    masterGain: 0.44,
+    layers: [
+      { kind: "noise", filterType: "lowpass", filterFrequency: 900, filterQ: 0.8, attack: 0.05, decay: 0.24, peak: 0.035 },
+      { kind: "tone", waveform: "sine", frequency: 220, glideTo: 440, glideTime: 0.32, attack: 0.04, decay: 0.34, peak: 0.055 },
+      { kind: "tone", waveform: "sine", frequency: 659.25, offset: 0.12, attack: 0.045, decay: 0.32, peak: 0.04 },
+      { kind: "tone", waveform: "sine", frequency: 987.77, offset: 0.19, attack: 0.045, decay: 0.34, peak: 0.032 },
+    ],
+    shimmer: { delay: 0.16, feedback: 0.28, wet: 0.18, lowpass: 3200 },
   },
 } as const satisfies Record<string, SoundRecipe>;
 
